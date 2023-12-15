@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd">
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="f24f5c7e-4a39-49dd-bb40-6fa07da5ea94" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="admin" database="muledb" />
+	</db:config>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="e230e8cb-0c1f-4c97-a2a6-2a1854061e7a" sendCorrelationId="ALWAYS" >
+		<jms:active-mq-connection username="admin" password="admin" >
+			<jms:caching-strategy >
+				<jms:default-caching cacheProducers="false" cacheConsumers="false" />
+			</jms:caching-strategy>
+			<jms:factory-configuration />
+		</jms:active-mq-connection>
+	</jms:config>
+	<flow name="activemqFlow" doc:id="bfc80c37-9f6a-4155-81a3-96468051e462" >
+		<scheduler doc:name="Scheduler" doc:id="8b41326c-1ded-4380-adeb-64a0e55922f3" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="2" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Start Log" doc:id="65b6fbd6-7984-4273-bfaf-4b519100e887" message="publish profile flow started"/>
+		<db:select doc:name="Select" doc:id="ec6ff522-bcea-4fb9-92f2-0857a0d12f7a" config-ref="Database_Config">
+			<db:sql ><![CDATA[select id,name from company;]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="0b930d50-833d-4d3b-8629-6da62fb6f60d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ((company, indexOfCompany) -> {
+    id: company.id,
+    name: company.name
+})
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<jms:publish doc:name="Publish" doc:id="2a05d92a-227b-473f-b84a-835e1f47c1a0" config-ref="JMS_Config" destination="company" timeToLive="30" timeToLiveUnit="SECONDS">
+			<jms:message >
+				<jms:reply-to destination="company" />
+			</jms:message>
+		</jms:publish>
+		<logger level="INFO" doc:name="Logger" doc:id="2574aa1e-6620-4d3d-8e0d-07fd1904bf1c" message="the flow has been completed"/>
+	</flow>
+</mule>
